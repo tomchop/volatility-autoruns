@@ -329,7 +329,6 @@ class Autoruns(hivelist.HiveList):
 
         valdict = self.dict_for_key(key)
         results = []
-        print valdict
         for v in valdict:
             if valdict[v] not in ["", None, "\x00"]:
                 pids = self.find_pids_for_imagepath(valdict[v])
