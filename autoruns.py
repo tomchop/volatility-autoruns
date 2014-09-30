@@ -2,12 +2,14 @@ import volatility.debug as debug
 import volatility.win32.rawreg as rawreg
 import volatility.plugins.registry.registryapi as registryapi
 import volatility.plugins.registry.hivelist as hivelist
+import volatility.plugins.filescan as filescan
+import volatility.plugins.dumpfiles as dumpfiles
 import volatility.win32.hive as hivemod
 import volatility.win32 as win32
 import volatility.obj as obj
 import volatility.utils as utils
-
-
+import xml.etree.ElementTree as ET
+import re
 # HKLM\Software\
 SOFTWARE_RUN_KEYS = [
                 "Microsoft\\Windows\\CurrentVersion\\Run",
@@ -100,17 +102,34 @@ def sanitize_paths(path):
     path = path.replace('"', '').replace("'", '')
     return path
 
+def get_indented_dict(d, depth=0):
+    output = ""
+    for key in d:
+        output += "{}{}: ".format(" "*depth*2, key)
+        if isinstance(d[key], dict):
+            output += "\n" + get_indented_dict(d[key], depth+1)
+        elif isinstance(d[key], list):
+            output += '\n'
+            for e in d[key]:
+                output += get_indented_dict(e, depth+1)
+        else:
+            output += "{}\n".format(d[key])
+
+    return output
+
+
+
 
 class Autoruns(hivelist.HiveList):
     """Searches the registry for applications running at system startup and maps them to running processes"""
     def __init__(self, config, *args, **kwargs):
         hivelist.HiveList.__init__(self, config, *args, **kwargs)
-        config.add_option('HIVE-OFFSET', short_option = 'o',
-                          help = 'Hive offset (virtual)', type = 'int')
-        config.add_option('KEY', short_option = 'K',
-                          help = 'Registry Key', type = 'str')
+        # config.add_option('HIVE-OFFSET', short_option = 'o',
+        #                   help = 'Hive offset (virtual)', type = 'int')
+        # config.add_option('KEY', short_option = 'K',
+        #                   help = 'Registry Key', type = 'str')
         config.add_option("ASEP-TYPE", short_option = 't', default = None,
-                          help = 'Show these ASEP types: autoruns, services, appinit, winlogon (comma-separated)',
+                          help = 'Show these ASEP types: autoruns, services, appinit, winlogon, tasks (comma-separated)',
                           action = 'store', type = 'str')
 
         config.add_option("VERBOSE", short_option = 'v', default = False,
@@ -121,9 +140,9 @@ class Autoruns(hivelist.HiveList):
 
     def get_dll_list(self):
         addr_space = utils.load_as(self._config)
-        tasks = win32.tasks.pslist(addr_space)
+        task_objects = win32.tasks.pslist(addr_space)
         self.process_dict = {}
-        for task in tasks:
+        for task in task_objects:
             if task.Peb:
                 self.process_dict[int(task.UniqueProcessId)] = (task, [m for m in task.get_load_modules()])
 
@@ -336,6 +355,90 @@ class Autoruns(hivelist.HiveList):
 
         return results
 
+    def get_tasks(self):
+        addr_space = utils.load_as(self._config)
+        f = filescan.FileScan(self._config)
+        tasks = []
+        parsed_tasks = []
+        for file in f.calculate():
+            filename = str(file.file_name_with_device() or '')
+            if "system32\\tasks\\" in filename.lower() and ('system32\\tasks\\microsoft' not in filename.lower() or self._config.VERBOSE):
+                header = file.get_object_header()
+                tasks.append((file.obj_offset, filename))
+                debug.debug("Found task: 0x{0:x} {1}".format(file.obj_offset, filename))
+
+        for offset, name in tasks:
+
+            # self._config.PHYSOFFSET = '7d94c300'
+            self._config.PHYSOFFSET = '0x{:x}'.format(offset)
+            df = dumpfiles.DumpFiles(self._config)
+            self._config.DUMP_DIR = '.'
+            for data in df.calculate():
+                # Doing this with mmap would probably be cleaner
+                # Create a sufficiently large (dynamically resizable?) 
+                # memory map so that we can seek and write the file accordingly
+                #
+                # SystemError: mmap: resizing not available--no mremap()
+
+                chopped_file = {}
+
+                for mdata in data['present']:
+                    rdata = addr_space.base.read(mdata[0], mdata[2])
+                    chopped_file[mdata[1]] = rdata
+                
+                task_xml = "".join(part[1] for part in sorted(chopped_file.items(), key=lambda x: x[0]))
+                
+                parsed = self.parse_task_xml(task_xml)
+                
+                if parsed:
+                    args = parsed['Actions']['Exec'].get("Arguments", None)
+                    if args:
+                        parsed['Actions']['Exec']['Command'] += " {}".format(args)
+                    pids = self.find_pids_for_imagepath(parsed['Actions']['Exec']['Command'])
+                    parsed_tasks.append((name.split('\\')[-1], parsed, task_xml, pids))
+
+        return parsed_tasks
+
+        
+        
+            
+    def parse_task_xml(self, xml):
+        xml = re.sub('\x00\x00+', '', xml) + '\x00'
+        xml = xml.decode('utf-16')
+        xml = re.sub(r"<Task(.*?)>", "<Task>", xml)
+        xml = xml.encode('utf-16')
+        
+        root = ET.fromstring(xml)
+        d = {}
+        
+        for e in root.findall("./RegistrationInfo/Date"):
+            d['Date'] = e.text
+        for e in root.findall("./RegistrationInfo/Description"):
+            d['Description'] = e.text
+        for e in root.findall("./Actions"):
+            d['Actions'] = self.visit_all_children(e)
+        for e in root.findall("./Settings/Enabled"):
+            d['Enabled'] = e.text
+        for e in root.findall("./Settings/Hidden"):
+            d['Hidden'] = e.text
+        for t in root.findall("./Triggers/*"):
+            d['Triggers'] = self.visit_all_children(t)
+
+        if not d.get("Actions", {}).get('Exec', {}).get("Command", False):
+            return None
+
+        return d
+
+
+    def visit_all_children(self, node): 
+        d = {}
+        for c in node:
+            d[c.tag] = self.visit_all_children(c)
+        if node.text.strip(' \t\n\r'):
+            d = node.text.strip(' \t\n\r')
+        return d
+
+
     def calculate(self):
         self.get_dll_list()
 
@@ -349,6 +452,7 @@ class Autoruns(hivelist.HiveList):
         self.appinit_dlls = []
         self.winlogon = []
         self.winlogon_registrations = []
+        self.tasks = []
 
         # Scan for ASEPs and populate the lists
         if 'autoruns' in asep_list:
@@ -360,6 +464,9 @@ class Autoruns(hivelist.HiveList):
         if 'winlogon' in asep_list:
             self.winlogon = self.get_winlogon()
             self.winlogon_registrations = self.get_winlogon_registrations()
+        if 'tasks' in asep_list:
+            self.tasks = self.get_tasks()
+
 
 
     def render_table(self, outfd, data):
@@ -397,6 +504,15 @@ class Autoruns(hivelist.HiveList):
                             'Services',
                             timestamp,
                             "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start, ", ".join([str(p) for p in pids]) or "-"))
+
+        for name, task, task_xml, pids in self.tasks:
+            self.table_row( outfd,
+                            task['Actions']['Exec']['Command'],
+                            'Scheduled Tasks',
+                            task['Date'],
+                            "{} ({})".format(name, task.get('Description', "N/A")),
+                            ", ".join([str(p) for p in pids]) or "-"
+                            )
 
 
     def render_text(self, outfd, data):
@@ -442,3 +558,14 @@ class Autoruns(hivelist.HiveList):
                 for hook in hooks:
                     outfd.write("        {0:<20} {1}\n".format(hook[0], hook[1]))
                 outfd.write("\n")
+
+        if self.tasks:
+            outfd.write("\n\n")
+            outfd.write("{:=<50}\n\n".format("Scheduled tasks "))
+            for name, task, task_xml, pids in self.tasks:
+                outfd.write("==== Task name: {} (PIDs: {})\n".format(name, ", ".join([str(p) for p in pids]) or "-"))
+                outfd.write(get_indented_dict(task))
+                outfd.write('\n')
+                outfd.write("Raw XML:\n\n---------\n{}\n---------\n\n\n".format(task_xml))
+
+
