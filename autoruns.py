@@ -121,13 +121,10 @@ def get_indented_dict(d, depth=0):
 
 
 class Autoruns(hivelist.HiveList):
-    """Searches the registry for applications running at system startup and maps them to running processes"""
+    """Searches the registry and memory space for applications running at system startup and maps them to running processes"""
     def __init__(self, config, *args, **kwargs):
         hivelist.HiveList.__init__(self, config, *args, **kwargs)
-        # config.add_option('HIVE-OFFSET', short_option = 'o',
-        #                   help = 'Hive offset (virtual)', type = 'int')
-        # config.add_option('KEY', short_option = 'K',
-        #                   help = 'Registry Key', type = 'str')
+
         config.add_option("ASEP-TYPE", short_option = 't', default = None,
                           help = 'Show these ASEP types: autoruns, services, appinit, winlogon, tasks (comma-separated)',
                           action = 'store', type = 'str')
@@ -275,6 +272,7 @@ class Autoruns(hivelist.HiveList):
                 pids = self.find_pids_for_imagepath(parameters.get("ServiceDll"))
             else:
                 pids = self.find_pids_for_imagepath(image_path)
+
             return (name, timestamp, display_name, service_startup[startup], service_types[type], image_path, entry, pids)
 
     def get_services(self):
@@ -487,11 +485,10 @@ class Autoruns(hivelist.HiveList):
                 source = hive.split('\\')[-2] + '\\' + source
             
             for key, timestamp in self.autoruns[hive]:
-                source += " ({})".format(key.split('\\')[-1])
                 for name, dat, pids in self.autoruns[hive][(key, timestamp)]:
                     details = name
                     executable = dat
-                    self.table_row(outfd, executable, source, timestamp, details, ", ".join([str(p) for p in pids]) or "-")
+                    self.table_row(outfd, executable, source + " ({})".format(key.split('\\')[-1]), timestamp, details, ", ".join([str(p) for p in pids]) or "-")
 
         for name, timestamp, details, start, type, executable, entry, pids in self.services:
             if entry != None:
@@ -500,7 +497,9 @@ class Autoruns(hivelist.HiveList):
                             executable.replace('\x00', ''),
                             'Services',
                             timestamp,
-                            "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start, ", ".join([str(p) for p in pids]) or "-"))
+                            "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start),
+                             ", ".join([str(p) for p in pids]) or "-"
+                             )
 
         for name, task, task_xml, pids in self.tasks:
             self.table_row( outfd,
