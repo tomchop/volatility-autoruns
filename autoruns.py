@@ -313,34 +313,29 @@ class Autoruns(hivelist.HiveList):
             name = self.hive_name(obj.Object("_CMHIVE", vm = addr_space, offset = hoff))
             root = rawreg.get_root(h)
             
-            if not root:
-                if self._config.HIVE_OFFSET:
-                    debug.error("Unable to find root key. Is the hive offset correct?")
+            if 'ntuser.dat' in name.split('\\')[-1].lower():
+                keys = NTUSER_RUN_KEYS
+                ntuser_hive_roots.append(root)
+            elif 'software' in name.split('\\')[-1].lower():
+                keys = SOFTWARE_RUN_KEYS
+                software_hive_root = root
+            elif 'system' in name.split('\\')[-1].lower():
+                system_hive_root = root
+                continue
+            else: continue
             
-            else:
-                if 'ntuser.dat' in name.split('\\')[-1].lower():
-                    keys = NTUSER_RUN_KEYS
-                    ntuser_hive_roots.append(root)
-                elif 'software' in name.split('\\')[-1].lower():
-                    keys = SOFTWARE_RUN_KEYS
-                    software_hive_root = root
-                elif 'system' in name.split('\\')[-1].lower():
-                    system_hive_root = root
-                    continue
-                else: continue
+            debug.debug("Searching for keys in %s" % name)
+            
+            for full_key in keys:
+                results = []
+                debug.debug("  Opening %s" % (full_key))
+                key = rawreg.open_key(root, full_key.split('\\'))
+                results = self.parse_autoruns_key(key)
                 
-                debug.debug("Searching for keys in %s" % name)
-                
-                for full_key in keys:
-                    results = []
-                    debug.debug("  Opening %s" % (full_key))
-                    key = rawreg.open_key(root, full_key.split('\\'))
-                    results = self.parse_autoruns_key(key)
-                    
-                    if len(results) > 0:
-                        h = hives.get(name, {})
-                        h[(full_key, key.LastWriteTime)] = results
-                        hives[name] = h
+                if len(results) > 0:
+                    h = hives.get(name, {})
+                    h[(full_key, key.LastWriteTime)] = results
+                    hives[name] = h
 
         return hives
 
