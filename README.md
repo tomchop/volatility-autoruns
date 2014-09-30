@@ -6,7 +6,7 @@ To make an analyst's life a bit easier, I came up with the `autoruns` plugin. `a
 
 ## Roadmap
 
-* Extra ASEPs: Scheduled tasks, Startup folders
+* Extra ASEPs: Scheduled tasks (done!), Startup folders
 * OS X / Linux support
 * Performance optimizations
 
@@ -51,4 +51,8 @@ To make an analyst's life a bit easier, I came up with the `autoruns` plugin. `a
 **Services**
 
 * CurrentControlSet\Services
+* 
+** Scheduled Tasks **
+
+* C:\Windows\System32\Tasks\ (Windows Vista and onwards only)
 
