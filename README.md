@@ -51,8 +51,8 @@ To make an analyst's life a bit easier, I came up with the `autoruns` plugin. `a
 **Services**
 
 * CurrentControlSet\Services
-* 
-** Scheduled Tasks **
+
+**Scheduled Tasks**
 
 * C:\Windows\System32\Tasks\ (Windows Vista and onwards only)
 
