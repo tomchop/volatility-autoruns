@@ -434,8 +434,10 @@ class Autoruns(hivelist.HiveList):
         d = {}
         for c in node:
             d[c.tag] = self.visit_all_children(c)
-        if node.text.strip(' \t\n\r'):
-            d = node.text.strip(' \t\n\r')
+
+        if node.text:
+            if node.text.strip(' \t\n\r'):
+                d = node.text.strip(' \t\n\r')
         return d
 
 
