@@ -230,6 +230,7 @@ class Autoruns(hivelist.HiveList):
         k = self.dict_for_key(key)
         events = [(evt, k[evt].replace('\x00', '')) for evt in WINLOGON_NOTIFICATION_EVENTS if evt in k]
         
+        dllname = None
         for dictkey in k:
             if dictkey.lower() == 'dllname': # Nasty hack the variable "DLLName" has no consistent case
                 dllname = k[dictkey]
