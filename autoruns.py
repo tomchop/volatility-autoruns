@@ -234,7 +234,9 @@ class Autoruns(hivelist.HiveList):
             if dictkey.lower() == 'dllname': # Nasty hack the variable "DLLName" has no consistent case
                 dllname = k[dictkey]
 
-        pids = self.find_pids_for_imagepath(dllname)
+        pids = []
+        if dllname:
+            pids = self.find_pids_for_imagepath(dllname)
 
         return (dllname.replace('\x00',''), events, key.LastWriteTime, pids)
 
