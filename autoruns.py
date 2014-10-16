@@ -190,12 +190,13 @@ class Autoruns(hivelist.HiveList):
         
         self.regapi.set_current(hive_name = "software")
         appinit_values = self.regapi.reg_get_value(hive_name='software', key="Microsoft\\Windows NT\\CurrentVersion\\Windows", value='AppInit_DLLs')
-        appinit_dlls = appinit_values.replace('\x00', '').split(' ')
+        if appinit_values:
+            appinit_dlls = appinit_values.replace('\x00', '').split(' ')
         
-        if len(appinit_dlls) > 0:
-            return appinit_dlls
-        else:
-            return None
+            if len(appinit_dlls) > 0:
+                return appinit_dlls
+            else:
+                return None
 
     # Winlogon Notification packages are supported in pre-Vista versions of Windows only
     # See: http://technet.microsoft.com/fr-fr/library/cc721961(v=ws.10).aspx
