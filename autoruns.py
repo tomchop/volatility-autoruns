@@ -38,6 +38,13 @@ NTUSER_RUN_KEYS = [
             ]
 
 
+# Acitve Setup only executes commands from the SOFTWARE hive
+# See: https://helgeklein.com/blog/2010/04/active-setup-explained/
+#      http://blogs.msdn.com/b/aruns_blog/archive/2011/06/20/active-setup-registry-key-what-it-is-and-how-to-create-in-the-package-using-admin-studio-install-shield.aspx
+#      http://blog.spiderlabs.com/2014/07/backoff-technical-analysis.html
+
+ACTIVE_SETUP_KEY = "Microsoft\\Active Setup\\Installed Components"
+
 # Winlogon Notification packages are supported in pre-Vista versions of Windows only
 # See: http://technet.microsoft.com/en-us/library/cc721961(v=ws.10).aspx
 
@@ -296,6 +303,27 @@ class Autoruns(hivelist.HiveList):
 
         return services
 
+    def get_activesetup(self):
+        self.regapi.set_current(hive_name = "software")
+        activesetup_keys = self.regapi.reg_get_all_subkeys(hive_name='software', key=ACTIVE_SETUP_KEY)
+        results = []
+
+        for subkey in activesetup_keys:
+            r = self.parse_activesetup_keys(subkey)
+            if r:
+                results.append(r)
+
+        return results
+
+    def parse_activesetup_keys(self, subkey):
+        valdict = self.dict_for_key(subkey)
+        if 'StubPath' in valdict and valdict.get('StubPath', '').replace('\x00', ''):
+            pids = self.find_pids_for_imagepath(valdict['StubPath'])
+            return (valdict['StubPath'].replace('\x00', ''), subkey.LastWriteTime, pids)
+        else:
+            return None
+
+
     def get_autoruns(self):
         debug.debug("Getting offsets")
         addr_space = utils.load_as(self._config)
@@ -366,7 +394,6 @@ class Autoruns(hivelist.HiveList):
 
         for offset, name in tasks:
 
-            # self._config.PHYSOFFSET = '7d94c300'
             self._config.PHYSOFFSET = '0x{:x}'.format(offset)
             df = dumpfiles.DumpFiles(self._config)
             self._config.DUMP_DIR = '.'
@@ -444,7 +471,7 @@ class Autoruns(hivelist.HiveList):
         if self._config.ASEP_TYPE:
             asep_list = [s for s in self._config.ASEP_TYPE.split(',')]
         else:
-            asep_list = ['autoruns', 'services', 'appinit', 'winlogon']
+            asep_list = ['autoruns', 'services', 'appinit', 'winlogon', 'tasks', 'activesetup']
 
         self.autoruns = []
         self.services = []
@@ -452,6 +479,7 @@ class Autoruns(hivelist.HiveList):
         self.winlogon = []
         self.winlogon_registrations = []
         self.tasks = []
+        self.activesetup = []
 
         # Scan for ASEPs and populate the lists
         if 'autoruns' in asep_list:
@@ -465,6 +493,8 @@ class Autoruns(hivelist.HiveList):
             self.winlogon_registrations = self.get_winlogon_registrations()
         if 'tasks' in asep_list:
             self.tasks = self.get_tasks()
+        if 'activesetup' in asep_list:
+            self.activesetup = self.get_activesetup()
 
 
 
@@ -501,9 +531,7 @@ class Autoruns(hivelist.HiveList):
                             executable.replace('\x00', ''),
                             'Services',
                             timestamp,
-                            "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start),
-                             ", ".join([str(p) for p in pids]) or "-"
-                             )
+                            "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start, ", ".join([str(p) for p in pids]) or "-"))
 
         for name, task, task_xml, pids in self.tasks:
             self.table_row( outfd,
@@ -513,6 +541,15 @@ class Autoruns(hivelist.HiveList):
                             "{} ({})".format(name, task.get('Description', "N/A")),
                             ", ".join([str(p) for p in pids]) or "-"
                             )
+
+        for name, date, pids in self.activesetup:
+            self.table_row( outfd,
+                            name,
+                            "Active Setup",
+                            date,
+                            "-",
+                            ", ".join([str(p) for p in pids]) or "-"
+                )
 
 
     def render_text(self, outfd, data):
@@ -567,5 +604,12 @@ class Autoruns(hivelist.HiveList):
                 outfd.write(get_indented_dict(task))
                 outfd.write('\n')
                 outfd.write("Raw XML:\n\n---------\n{}\n---------\n\n\n".format(task_xml))
+
+        if self.activesetup:
+            outfd.write("\n\n")
+            outfd.write("{:=<50}\n\n".format("Active Setup "))
+            for imagename, last_write_time, pids in self.activesetup:
+                outfd.write("Command line: {}\nLast-written: {} (PIDs: {})\n\n".format(imagename, last_write_time, ", ".join([str(p) for p in pids]) or "-"))
+
 
 
