@@ -45,6 +45,13 @@ NTUSER_RUN_KEYS = [
 
 ACTIVE_SETUP_KEY = "Microsoft\\Active Setup\\Installed Components"
 
+
+# Abusing MS Fix-It patches to ensure persistence
+# References: https://www.blackhat.com/docs/asia-14/materials/Erickson/WP-Asia-14-Erickson-Persist-It-Using-And-Abusing-Microsofts-Fix-It-Patches.pdf
+
+APPCOMPAT_SDB_KEY = "Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\InstalledSDB"
+
+
 # Winlogon Notification packages are supported in pre-Vista versions of Windows only
 # See: http://technet.microsoft.com/en-us/library/cc721961(v=ws.10).aspx
 
@@ -60,21 +67,21 @@ WINLOGON_NOTIFICATION_EVENTS = [    "Lock",
                                 ]
 
 WINLOGON_REGISTRATION_KNOWN_DLLS = [
-                                        'crypt32.dll', 
-                                        'cryptnet.dll', 
-                                        'cscdll.dll', 
-                                        'dimsntfy.dll', 
-                                        'sclgntfy.dll', 
-                                        'wlnotify.dll', 
-                                        'wzcdlg.dll', 
+                                        'crypt32.dll',
+                                        'cryptnet.dll',
+                                        'cscdll.dll',
+                                        'dimsntfy.dll',
+                                        'sclgntfy.dll',
+                                        'wlnotify.dll',
+                                        'wzcdlg.dll',
                                     ]
 
 WINLOGON_COMMON_VALUES = {
                         'Userinit': 'userinit.exe',
-                        'VmApplet': 'rundll32 shell32,Control_RunDLL "sysdm.cpl"', 
-                        'Shell': 'Explorer.exe', 
-                        'TaskMan': "Taskmgr.exe", 
-                        'System': 'lsass.exe', 
+                        'VmApplet': 'rundll32 shell32,Control_RunDLL "sysdm.cpl"',
+                        'Shell': 'Explorer.exe',
+                        'TaskMan': "Taskmgr.exe",
+                        'System': 'lsass.exe',
                         }
 
 # Service key -> value maps
@@ -86,8 +93,8 @@ service_types = { 0x001 : "Kernel driver",
                   0x008 : "File system driver",
                   0x010 : "Own_Process",
                   0x020 : "Share_Process",
-                  0x100 : "Interactive", 
-                  0x110 : "Interactive", 
+                  0x100 : "Interactive",
+                  0x110 : "Interactive",
                   0x120 : "Share_process Interactive",
                      -1 : "Unknown" }
 
@@ -95,7 +102,7 @@ service_startup = {   0x00 : "Boot Start",
                       0x01 : "System Start",
                       0x02 : "Auto Start",
                       0x03 : "Manual",
-                      0x04 : "Disabled", 
+                      0x04 : "Disabled",
                         -1 : "Unknown" }
 
 def sanitize_paths(path):
@@ -133,7 +140,7 @@ class Autoruns(hivelist.HiveList):
         hivelist.HiveList.__init__(self, config, *args, **kwargs)
 
         config.add_option("ASEP-TYPE", short_option = 't', default = None,
-                          help = 'Show these ASEP types: autoruns, services, appinit, winlogon, tasks (comma-separated)',
+                          help = 'Show these ASEP types: autoruns, services, appinit, winlogon, tasks, sdb (comma-separated)',
                           action = 'store', type = 'str')
 
         config.add_option("VERBOSE", short_option = 'v', default = False,
@@ -162,7 +169,7 @@ class Autoruns(hivelist.HiveList):
                     cmdline = self.process_dict[pid][0].Peb.ProcessParameters.CommandLine
                     if module.lower() in sanitize_paths(str(self.process_dict[pid][0].Peb.ProcessParameters.CommandLine or '[no cmdline]').lower()):
                         pids.append(pid)
-                
+
                 # case where the module is actually lodaded process (case for DLLs loaded by services)
                 for dll in self.process_dict[pid][1]:
                     if module.lower() in sanitize_paths(str(dll.FullDllName or '[no dllname]').lower()):
@@ -194,12 +201,12 @@ class Autoruns(hivelist.HiveList):
         return valdict
 
     def get_appinit_dlls(self):
-        
+
         self.regapi.set_current(hive_name = "software")
         appinit_values = self.regapi.reg_get_value(hive_name='software', key="Microsoft\\Windows NT\\CurrentVersion\\Windows", value='AppInit_DLLs')
         if appinit_values:
             appinit_dlls = appinit_values.replace('\x00', '').split(' ')
-        
+
             if len(appinit_dlls) > 0:
                 return appinit_dlls
             else:
@@ -209,7 +216,7 @@ class Autoruns(hivelist.HiveList):
     # See: http://technet.microsoft.com/fr-fr/library/cc721961(v=ws.10).aspx
     def get_winlogon_registrations(self):
         self.regapi.set_current(hive_name = "software")
-        
+
         winlogon_registrations = []
         for subkey in self.regapi.reg_get_all_subkeys(hive_name = 'software', key = "Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Notify"):
             reg = self.parse_winlogon_registration_key(subkey)
@@ -221,7 +228,7 @@ class Autoruns(hivelist.HiveList):
 
     def get_winlogon(self):
         self.regapi.set_current(hive_name = "software")
-        
+
         winlogon = []
         winlogon_key = self.regapi.reg_get_key(hive_name = 'software', key = "Microsoft\\Windows NT\\CurrentVersion\\Winlogon")
         valdict = self.dict_for_key(winlogon_key)
@@ -237,7 +244,7 @@ class Autoruns(hivelist.HiveList):
     def parse_winlogon_registration_key(self, key):
         k = self.dict_for_key(key)
         events = [(evt, k[evt].replace('\x00', '')) for evt in WINLOGON_NOTIFICATION_EVENTS if evt in k]
-        
+
         dllname = ""
         for dictkey in k:
             if dictkey.lower() == 'dllname': # Nasty hack the variable "DLLName" has no consistent case
@@ -258,7 +265,7 @@ class Autoruns(hivelist.HiveList):
         type = int(service_dict.get("Type", -1))
         image_path = service_dict.get("ImagePath", "Unknown").replace('\x00', '')
         timestamp = service_key.LastWriteTime
-        
+
         # The service is run through svchost - try to resolve the parameter name
         entry = None
         if "svchost.exe -k" in image_path:
@@ -274,8 +281,8 @@ class Autoruns(hivelist.HiveList):
                     main = parameters.get('ServiceMain')
                     if main:
                         entry += " ({})".format(main)
-                    entry = entry.replace('\x00', '')            
-        
+                    entry = entry.replace('\x00', '')
+
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
         if startup in [0, 1, 2]:
@@ -323,6 +330,26 @@ class Autoruns(hivelist.HiveList):
         else:
             return None
 
+    def get_sdb(self):
+        self.regapi.set_current(hive_name = "software")
+        sdb_keys = self.regapi.reg_get_all_subkeys(hive_name='software', key=APPCOMPAT_SDB_KEY)
+        results = []
+
+        for subkey in sdb_keys:
+            r = self.parse_sdb_key(subkey)
+            if r:
+                results.append(r)
+
+        return results
+
+    def parse_sdb_key(self, subkey):
+        valdict = self.dict_for_key(subkey)
+        desc = sanitize_paths(valdict['DatabaseDescription'])
+        timestamp = subkey.LastWriteTime
+        path = sanitize_paths(valdict['DatabasePath'])
+        pids = self.find_pids_for_imagepath(desc)
+
+        return (desc, path, timestamp, pids)
 
     def get_autoruns(self):
         debug.debug("Getting offsets")
@@ -339,10 +366,10 @@ class Autoruns(hivelist.HiveList):
 
         for hoff in set(hive_offsets):
             h = hivemod.HiveAddressSpace(addr_space, self._config, hoff)
-            
+
             name = self.hive_name(obj.Object("_CMHIVE", vm = addr_space, offset = hoff))
             root = rawreg.get_root(h)
-            
+
             if 'ntuser.dat' in name.split('\\')[-1].lower():
                 keys = NTUSER_RUN_KEYS
                 ntuser_hive_roots.append(root)
@@ -353,15 +380,15 @@ class Autoruns(hivelist.HiveList):
                 system_hive_root = root
                 continue
             else: continue
-            
+
             debug.debug("Searching for keys in %s" % name)
-            
+
             for full_key in keys:
                 results = []
                 debug.debug("  Opening %s" % (full_key))
                 key = rawreg.open_key(root, full_key.split('\\'))
                 results = self.parse_autoruns_key(key)
-                
+
                 if len(results) > 0:
                     h = hives.get(name, {})
                     h[(full_key, key.LastWriteTime)] = results
@@ -399,7 +426,7 @@ class Autoruns(hivelist.HiveList):
             self._config.DUMP_DIR = '.'
             for data in df.calculate():
                 # Doing this with mmap would probably be cleaner
-                # Create a sufficiently large (dynamically resizable?) 
+                # Create a sufficiently large (dynamically resizable?)
                 # memory map so that we can seek and write the file accordingly
                 #
                 # SystemError: mmap: resizing not available--no mremap()
@@ -409,11 +436,11 @@ class Autoruns(hivelist.HiveList):
                 for mdata in data['present']:
                     rdata = addr_space.base.read(mdata[0], mdata[2])
                     chopped_file[mdata[1]] = rdata
-                
+
                 task_xml = "".join(part[1] for part in sorted(chopped_file.items(), key=lambda x: x[0]))
-                
+
                 parsed = self.parse_task_xml(task_xml)
-                
+
                 if parsed:
                     args = parsed['Actions']['Exec'].get("Arguments", None)
                     if args:
@@ -423,18 +450,18 @@ class Autoruns(hivelist.HiveList):
 
         return parsed_tasks
 
-        
-        
-            
+
+
+
     def parse_task_xml(self, xml):
         xml = re.sub('\x00\x00+', '', xml) + '\x00'
         xml = xml.decode('utf-16')
         xml = re.sub(r"<Task(.*?)>", "<Task>", xml)
         xml = xml.encode('utf-16')
-        
+
         root = ET.fromstring(xml)
         d = {}
-        
+
         for e in root.findall("./RegistrationInfo/Date"):
             d['Date'] = e.text
         for e in root.findall("./RegistrationInfo/Description"):
@@ -454,7 +481,7 @@ class Autoruns(hivelist.HiveList):
         return d
 
 
-    def visit_all_children(self, node): 
+    def visit_all_children(self, node):
         d = {}
         for c in node:
             d[c.tag] = self.visit_all_children(c)
@@ -471,7 +498,7 @@ class Autoruns(hivelist.HiveList):
         if self._config.ASEP_TYPE:
             asep_list = [s for s in self._config.ASEP_TYPE.split(',')]
         else:
-            asep_list = ['autoruns', 'services', 'appinit', 'winlogon', 'tasks', 'activesetup']
+            asep_list = ['autoruns', 'services', 'appinit', 'winlogon', 'tasks', 'activesetup', 'sdb']
 
         self.autoruns = []
         self.services = []
@@ -495,6 +522,9 @@ class Autoruns(hivelist.HiveList):
             self.tasks = self.get_tasks()
         if 'activesetup' in asep_list:
             self.activesetup = self.get_activesetup()
+        if 'sdb' in asep_list:
+            self.sdb = self.get_sdb()
+
 
 
 
@@ -508,16 +538,16 @@ class Autoruns(hivelist.HiveList):
                            ])
 
         for line in self.winlogon_registrations:
-            self.table_row(outfd, line[0] or '', 'Winlogon (Notify)', line[2], 'Hooks: {0}'.format(", ".join([e[1] for e in line[1]]), len(line[1])), ", ".join([str(p) for p in line[3]]) or "-")   
+            self.table_row(outfd, line[0] or '', 'Winlogon (Notify)', line[2], 'Hooks: {0}'.format(", ".join([e[1] for e in line[1]]), len(line[1])), ", ".join([str(p) for p in line[3]]) or "-")
 
         for line in self.winlogon:
             self.table_row(outfd, line[1].replace('\x00', ''), 'Winlogon ({})'.format(line[0]), line[2], "Default value: {}".format(line[3]), ", ".join([str(p) for p in line[4]]) or "-")
-        
+
         for hive in self.autoruns:
             source = hive.split('\\')[-1]
             if source == "NTUSER.DAT":
                 source = hive.split('\\')[-2] + '\\' + source
-            
+
             for key, timestamp in self.autoruns[hive]:
                 for name, dat, pids in self.autoruns[hive][(key, timestamp)]:
                     details = name
@@ -543,17 +573,25 @@ class Autoruns(hivelist.HiveList):
                             )
 
         for name, date, pids in self.activesetup:
-            self.table_row( outfd,
-                            name,
-                            "Active Setup",
-                            date,
-                            "-",
-                            ", ".join([str(p) for p in pids]) or "-"
-                )
+            self.table_row(outfd,
+                           name,
+                           "Active Setup",
+                           date,
+                           "-",
+                           ", ".join([str(p) for p in pids]) or "-"
+                           )
+
+        for desc, path, timestamp, pids in self.sdb:
+            self.table_row(outfd,
+                           path,
+                           "SDB",
+                           timestamp,
+                           desc
+                           )
 
 
     def render_text(self, outfd, data):
-        
+
         if self.autoruns:
             outfd.write("\n\n")
             outfd.write("{:=<50}\n\n".format("Autoruns "))
@@ -575,7 +613,7 @@ class Autoruns(hivelist.HiveList):
                 if entry:
                     outfd.write("    Loads: {}\n".format(entry))
                 outfd.write("\n")
-                
+
         if self.winlogon:
             outfd.write("\n\n")
             outfd.write("{:=<50}\n\n".format("Winlogon "))
@@ -584,7 +622,7 @@ class Autoruns(hivelist.HiveList):
                 outfd.write("    PIDs: {}\n".format(", ".join([str(p) for p in pids]) or "-"))
                 outfd.write("    Last write time: {}\n".format(timestamp))
                 outfd.write("\n")
-        
+
         if self.winlogon_registrations:
             outfd.write("\n\n")
             outfd.write("{:=<50}\n\n".format("Winlogon Notify registrations "))
@@ -610,6 +648,12 @@ class Autoruns(hivelist.HiveList):
             outfd.write("{:=<50}\n\n".format("Active Setup "))
             for imagename, last_write_time, pids in self.activesetup:
                 outfd.write("Command line: {}\nLast-written: {} (PIDs: {})\n\n".format(imagename, last_write_time, ", ".join([str(p) for p in pids]) or "-"))
+
+        if self.sdb:
+            outfd.write("\n\n")
+            outfd.write("{:=<50}\n\n".format("SDB Fix-it patches "))
+            for desc, path, timestamp, pids in self.sdb:
+                outfd.write("Description: \"{}\"\nLast-written: {}\nPatch: {}\n\n".format(desc, timestamp, path))
 
 
 
