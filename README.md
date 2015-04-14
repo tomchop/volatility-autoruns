@@ -70,4 +70,8 @@ Relevant options for the plugin are:
 
 * Microsoft\Active Setup\Installed Components
 
+**Microsoft Fix-it**
+
+* Microsoft\Windows NT\CurrentVersion\AppCompatFlags\InstalledSDB
+
 

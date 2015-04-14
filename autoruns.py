@@ -47,7 +47,9 @@ ACTIVE_SETUP_KEY = "Microsoft\\Active Setup\\Installed Components"
 
 
 # Abusing MS Fix-It patches to ensure persistence
-# References: https://www.blackhat.com/docs/asia-14/materials/Erickson/WP-Asia-14-Erickson-Persist-It-Using-And-Abusing-Microsofts-Fix-It-Patches.pdf
+# References:
+# https://www.blackhat.com/docs/asia-14/materials/Erickson/WP-Asia-14-Erickson-Persist-It-Using-And-Abusing-Microsofts-Fix-It-Patches.pdf
+# http://blog.cert.societegenerale.com/2015/04/analyzing-gootkits-persistence-mechanism.html
 
 APPCOMPAT_SDB_KEY = "Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\InstalledSDB"
 
