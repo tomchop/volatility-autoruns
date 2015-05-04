@@ -509,6 +509,7 @@ class Autoruns(hivelist.HiveList):
         self.winlogon_registrations = []
         self.tasks = []
         self.activesetup = []
+        self.sdb = []
 
         # Scan for ASEPs and populate the lists
         if 'autoruns' in asep_list:
