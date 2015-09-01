@@ -260,36 +260,38 @@ class Autoruns(hivelist.HiveList):
 
     def parse_service_key(self, service_key):
 
-        service_dict = self.dict_for_key(service_key)
         name = str(service_key.Name)
-        display_name = service_dict.get('DisplayName', "Unknown").replace('\x00', '')
-        startup = int(service_dict.get("Start", -1))
-        type = int(service_dict.get("Type", -1))
-        image_path = service_dict.get("ImagePath", "Unknown").replace('\x00', '')
+
+        values = {str(name): str(dat) for name, dat in self.regapi.reg_yield_values(hive_name='system', key='', given_root=service_key)}
+
+        image_path = values.get("ImagePath", None)
+        if not image_path:
+            return
+        display_name = values.get("DisplayName")
+        startup = int(values.get("Start"))
+        type = int(values.get("Type"))
+
         timestamp = service_key.LastWriteTime
 
         # The service is run through svchost - try to resolve the parameter name
         entry = None
+
         if "svchost.exe -k" in image_path:
-            parameters = None
-            for sub in rawreg.subkeys(service_key):
-                if sub.Name == "Parameters":
-                    parameters = self.dict_for_key(sub)
-                    timestamp = sub.LastWriteTime
-                    break
-            if parameters:
-                if 'ServiceDll' in parameters:
-                    entry = parameters.get("ServiceDll")
-                    main = parameters.get('ServiceMain')
-                    if main:
-                        entry += " ({})".format(main)
-                    entry = entry.replace('\x00', '')
+            sk = self.regapi.reg_get_key(hive_name='system', key='Parameters', given_root=service_key)
+            if sk:
+                timestamp = sk.LastWriteTime
+                entry = self.regapi.reg_get_value(hive_name='system', key='', value="ServiceDll", given_root=sk)
+                main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk)
+                if main:
+                    entry += " ({})".format(main)
+                entry = entry.replace('\x00', '')
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
+
         if startup in [0, 1, 2]:
             if entry:
-                pids = self.find_pids_for_imagepath(parameters.get("ServiceDll"))
+                pids = self.find_pids_for_imagepath(entry)
             else:
                 pids = self.find_pids_for_imagepath(image_path)
 
@@ -305,7 +307,6 @@ class Autoruns(hivelist.HiveList):
         self.regapi.set_current(hive_name = "system")
         for service in self.regapi.reg_get_all_subkeys(hive_name='system', key=currentcs+"\\Services"):
             service = self.parse_service_key(service)
-
             if service:
                 if (self._config.VERBOSE == True) or (self._config.VERBOSE == False and 'system32' not in service[5].lower() and service[5] != "Unknown"):
                     services.append(service)
