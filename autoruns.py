@@ -282,9 +282,10 @@ class Autoruns(hivelist.HiveList):
                 timestamp = sk.LastWriteTime
                 entry = self.regapi.reg_get_value(hive_name='system', key='', value="ServiceDll", given_root=sk)
                 main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk)
-                if main:
-                    entry += " ({})".format(main)
-                entry = entry.replace('\x00', '')
+                if entry:
+                    if main:
+                        entry += " ({})".format(main)
+                    entry = entry.replace('\x00', '')
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
@@ -658,6 +659,3 @@ class Autoruns(hivelist.HiveList):
             outfd.write("{:=<50}\n\n".format("SDB Fix-it patches "))
             for desc, path, timestamp, pids in self.sdb:
                 outfd.write("Description: \"{}\"\nLast-written: {}\nPatch: {}\n\n".format(desc, timestamp, path))
-
-
-
