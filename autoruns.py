@@ -285,7 +285,8 @@ class Autoruns(hivelist.HiveList):
                 if entry:
                     if main:
                         entry += " ({})".format(main)
-                    entry = entry.replace('\x00', '')
+                    if entry:
+                        entry = entry.replace('\x00', '')
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
