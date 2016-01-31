@@ -188,6 +188,8 @@ class Autoruns(hivelist.HiveList):
     def dict_for_key(self, key):
         # Inspired from the Volatility printkey plugin
         valdict = {}
+        if not key:
+            return valdict
         for v in rawreg.values(key):
             tp, data = rawreg.value_data(v)
 
