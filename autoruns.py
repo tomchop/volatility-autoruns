@@ -235,13 +235,14 @@ class Autoruns(hivelist.HiveList):
 
         winlogon = []
         winlogon_key = self.regapi.reg_get_key(hive_name = 'software', key = "Microsoft\\Windows NT\\CurrentVersion\\Winlogon")
-        valdict = self.dict_for_key(winlogon_key)
-        timestamp = winlogon_key.LastWriteTime
+        if winlogon_key:
+            valdict = self.dict_for_key(winlogon_key)
+            timestamp = winlogon_key.LastWriteTime
 
-        for value in valdict:
-            if value in WINLOGON_COMMON_VALUES:
-                pids = self.find_pids_for_imagepath(valdict[value])
-                winlogon.append((value, valdict[value].replace('\x00', ''), timestamp, WINLOGON_COMMON_VALUES[str(value)], pids))
+            for value in valdict:
+                if value in WINLOGON_COMMON_VALUES:
+                    pids = self.find_pids_for_imagepath(valdict[value])
+                    winlogon.append((value, valdict[value].replace('\x00', ''), timestamp, WINLOGON_COMMON_VALUES[str(value)], pids))
 
         return winlogon
 
