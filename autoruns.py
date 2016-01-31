@@ -285,10 +285,10 @@ class Autoruns(hivelist.HiveList):
                 entry = self.regapi.reg_get_value(hive_name='system', key='', value="ServiceDll", given_root=sk)
                 main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk)
                 if entry:
+                    entry = entry.replace('\x00', '')
                     if main:
                         entry += " ({})".format(main)
-                    if entry:
-                        entry = entry.replace('\x00', '')
+
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
