@@ -192,6 +192,8 @@ class Autoruns(hivelist.HiveList):
     def dict_for_key(self, key):
         # Inspired from the Volatility printkey plugin
         valdict = {}
+        if not key:
+            return valdict
         for v in rawreg.values(key):
             tp, data = rawreg.value_data(v)
 
@@ -237,13 +239,14 @@ class Autoruns(hivelist.HiveList):
 
         winlogon = []
         winlogon_key = self.regapi.reg_get_key(hive_name = 'software', key = "Microsoft\\Windows NT\\CurrentVersion\\Winlogon")
-        valdict = self.dict_for_key(winlogon_key)
-        timestamp = winlogon_key.LastWriteTime
+        if winlogon_key:
+            valdict = self.dict_for_key(winlogon_key)
+            timestamp = winlogon_key.LastWriteTime
 
-        for value in valdict:
-            if value in WINLOGON_COMMON_VALUES:
-                pids = self.find_pids_for_imagepath(valdict[value])
-                winlogon.append((value, valdict[value].replace('\x00', ''), timestamp, WINLOGON_COMMON_VALUES[str(value)], pids))
+            for value in valdict:
+                if value in WINLOGON_COMMON_VALUES:
+                    pids = self.find_pids_for_imagepath(valdict[value])
+                    winlogon.append((value, valdict[value].replace('\x00', ''), timestamp, WINLOGON_COMMON_VALUES[str(value)], pids))
 
         return winlogon
 
@@ -287,9 +290,10 @@ class Autoruns(hivelist.HiveList):
                 entry = self.regapi.reg_get_value(hive_name='system', key='', value="ServiceDll", given_root=sk)
                 main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk)
                 if entry:
+                    entry = entry.replace('\x00', '')
                     if main:
                         entry += " ({})".format(main)
-                    entry = entry.replace('\x00', '')
+
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
