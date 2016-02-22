@@ -1,3 +1,7 @@
+import sys
+import re
+
+import xml.etree.ElementTree as ET
 import volatility.debug as debug
 import volatility.win32.rawreg as rawreg
 import volatility.plugins.registry.registryapi as registryapi
@@ -8,8 +12,8 @@ import volatility.win32.hive as hivemod
 import volatility.win32 as win32
 import volatility.obj as obj
 import volatility.utils as utils
-import xml.etree.ElementTree as ET
-import re
+
+
 # HKLM\Software\
 SOFTWARE_RUN_KEYS = [
                 "Microsoft\\Windows\\CurrentVersion\\Run",
@@ -455,35 +459,37 @@ class Autoruns(hivelist.HiveList):
         return parsed_tasks
 
 
-
-
     def parse_task_xml(self, xml):
+        raw = xml
         xml = re.sub('\x00\x00+', '', xml) + '\x00'
-        xml = xml.decode('utf-16')
-        xml = re.sub(r"<Task(.*?)>", "<Task>", xml)
-        xml = xml.encode('utf-16')
+        if xml:
+            try:
+                xml = xml.decode('utf-16')
+                xml = re.sub(r"<Task(.*?)>", "<Task>", xml)
+                xml = xml.encode('utf-16')
 
-        root = ET.fromstring(xml)
-        d = {}
+                root = ET.fromstring(xml)
+                d = {}
 
-        for e in root.findall("./RegistrationInfo/Date"):
-            d['Date'] = e.text
-        for e in root.findall("./RegistrationInfo/Description"):
-            d['Description'] = e.text
-        for e in root.findall("./Actions"):
-            d['Actions'] = self.visit_all_children(e)
-        for e in root.findall("./Settings/Enabled"):
-            d['Enabled'] = e.text
-        for e in root.findall("./Settings/Hidden"):
-            d['Hidden'] = e.text
-        for t in root.findall("./Triggers/*"):
-            d['Triggers'] = self.visit_all_children(t)
+                for e in root.findall("./RegistrationInfo/Date"):
+                    d['Date'] = e.text
+                for e in root.findall("./RegistrationInfo/Description"):
+                    d['Description'] = e.text
+                for e in root.findall("./Actions"):
+                    d['Actions'] = self.visit_all_children(e)
+                for e in root.findall("./Settings/Enabled"):
+                    d['Enabled'] = e.text
+                for e in root.findall("./Settings/Hidden"):
+                    d['Hidden'] = e.text
+                for t in root.findall("./Triggers/*"):
+                    d['Triggers'] = self.visit_all_children(t)
 
-        if not d.get("Actions", {}).get('Exec', {}).get("Command", False):
-            return None
+                if not d.get("Actions", {}).get('Exec', {}).get("Command", False):
+                    return None
 
-        return d
-
+                return d
+            except UnicodeDecodeError as e:
+                sys.stderr.write('UnicodeDecodeError for: {}\n'.format(repr(raw)))
 
     def visit_all_children(self, node):
         d = {}
