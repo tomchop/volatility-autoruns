@@ -279,9 +279,10 @@ class Autoruns(hivelist.HiveList):
         image_path = values.get("ImagePath", None)
         if not image_path:
             return
+
         display_name = values.get("DisplayName")
-        startup = int(values.get("Start"))
-        type = int(values.get("Type"))
+        startup = int(values.get("Start", -1))
+        type = int(values.get("Type", -1))
 
         timestamp = service_key.LastWriteTime
 
