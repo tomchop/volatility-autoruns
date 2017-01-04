@@ -97,7 +97,7 @@ WINLOGON_COMMON_VALUES = {
 service_types = {
     0x001: "Kernel driver",
     0x002: "File system driver",
-    0x004: "Argumetns for adapter",
+    0x004: "Arguments for adapter",
     0x008: "File system driver",
     0x010: "Own_Process",
     0x020: "Share_Process",
