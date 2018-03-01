@@ -569,10 +569,10 @@ class Autoruns(hivelist.HiveList):
             if entry is not None:
                 name += " (Loads: {})".format(entry)
             self.table_row(outfd,
-                           executable.replace('\x00', ''),
-                           'Services',
-                           timestamp,
-                           "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start, ", ".join([str(p) for p in pids]) or "-"))
+                        executable.replace('\x00', ''),
+                        'Services',
+                        timestamp,
+                        "{0} - {1} ({2} - {3})".format(name, "" if details is None else details.replace('\x00', ''), type, start), ", ".join([str(p) for p in pids]) or "-")
 
         for name, task, task_xml, pids in self.tasks:
             self.table_row(outfd,
