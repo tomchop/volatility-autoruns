@@ -12,7 +12,7 @@ Relevant options for the plugin are:
 
 * `-v` or `--verbose` - Shows extra information that would normally be filtered (like Services from the System32 folder)
 * `-t` or `--asep-type=[autoruns|services|appinit|winlogon|tasks|activesetup]` - Use it to focus on specific ASEPS. Options are: `autoruns` (Run, RunOnce, etc.), `services`, `appinit`, `winlogon`, `tasks`, and `activesetup`. You can specify any combination of them with a comma-separated list: `autoruns,services`. Leave blank to get all ASEPs.
-* `--output=[text|table]` - table will output the text in a table format (less readable but somehow more consice). The default output mode is text, where more information is avialable.
+* `--output=[text|table|json]` - table will output the text in a table format (less readable but somehow more consice). The default output mode is text, where more information is avialable. json option produces the unified json output format. 
 
 ## Roadmap
 
