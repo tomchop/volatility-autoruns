@@ -12,7 +12,7 @@ import volatility.win32.hive as hivemod
 import volatility.win32 as win32
 import volatility.obj as obj
 import volatility.utils as utils
-
+from volatility.renderers import TreeGrid
 
 # HKLM\Software\
 SOFTWARE_RUN_KEYS = [
@@ -539,6 +539,46 @@ class Autoruns(hivelist.HiveList):
         if 'sdb' in asep_list:
             self.sdb = self.get_sdb()
 
+        data = self.get_unified_output_data()
+        for result in data:
+            yield result
+    def get_unified_output_data(self):
+        data = []
+        for hive in self.autoruns:
+            source = hive.split('\\')[-1]
+            if source == "NTUSER.DAT":
+                source = hive.split('\\')[-2] + '\\' + source
+            for key, timestamp in self.autoruns[hive]:
+                for name, executable, pids in self.autoruns[hive][(key, timestamp)]:
+                    data.append([executable, 'Autoruns', timestamp, name, ", ".join([str(p) for p in pids]) or "", hive, key, name])
+        for line in self.winlogon_registrations:
+            data.append([(line[0] or ''), 'Winlogon (Notify)', line[2], 'Hooks: {0}'.format(", ".join([e[1] for e in line[1]]), len(line[1])), ", ".join([str(p) for p in line[3]]) or "", "", "", ""])
+        for line in self.winlogon:
+            data.append([line[1].replace('\x00', ''), 'Winlogon ({})'.format(line[0]), line[2], "Default value: {}".format(line[3]), ", ".join([str(p) for p in line[4]]) or "" , "Windows/System32/config/SOFTWARE", "Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon", line[0]])
+        for name, timestamp, details, start, type, executable, entry, pids in self.services:
+            data.append([executable.replace('\x00', ''),'Services',timestamp,"{0} - {1} ({2} - {3})".format(name, ("" if details is None else details.replace('\x00', '')) , type, start), ", ".join([str(p) for p in pids]) or "", "Windows/System32/config/SYSTEM", "ControlSet001\\Services\\" +name , ""])
+        for name, task, task_xml, pids in self.tasks:
+            data.append([task['Actions']['Exec']['Command'],'Scheduled Tasks', task['Date'], "{} ({})".format(name, task.get('Description', "N/A")), ", ".join([str(p) for p in pids]) or "", "", "", ""])
+        for name, date, pids in self.activesetup:
+            data.append([name,"Active Setup", date, "-", ", ".join([str(p) for p in pids]) or "", "Windows/System32/config/SOFTWARE", "", "StubPath"])
+        for desc, path, timestamp, pids in self.sdb:
+            data.append([path, "SDB", timestamp, desc, "", "", "", ""])
+        return data
+    def unified_output(self, data):
+        """This standardizes the output formatting"""
+        return TreeGrid([("Executable", str),
+                        ("Source", str),
+                        ("Last write time", str),
+                        ("Details", str),
+                        ("PIDs", str),
+                        ("Hive", str),
+                        ("Key", str),
+                        ("Name", str)],
+                        self.generator(data))
+    def generator(self, data):
+        """This yields data according to the unified output format"""
+        for executable, source, lastWriteTime, details, pids, hive, key, name in data:
+            yield (0, [str(executable), str(source), str(lastWriteTime), str(details), str(pids), str(hive), str(key), str(name)])
     def render_table(self, outfd, data):
         self.table_header(outfd,
                           [("Executable", "<65"),
@@ -569,10 +609,10 @@ class Autoruns(hivelist.HiveList):
             if entry is not None:
                 name += " (Loads: {})".format(entry)
             self.table_row(outfd,
-                           executable.replace('\x00', ''),
-                           'Services',
-                           timestamp,
-                           "{0} - {1} ({2} - {3})".format(name, details.replace('\x00', ''), type, start, ", ".join([str(p) for p in pids]) or "-"))
+                        executable.replace('\x00', ''),
+                        'Services',
+                        timestamp,
+                        "{0} - {1} ({2} - {3})".format(name, "" if details is None else details.replace('\x00', ''), type, start), ", ".join([str(p) for p in pids]) or "-")
 
         for name, task, task_xml, pids in self.tasks:
             self.table_row(outfd,
