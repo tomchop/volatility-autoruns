@@ -180,7 +180,7 @@ class Autoruns(hivelist.HiveList):
                     if module.lower() in sanitize_paths(str(cmdline or '[no cmdline]').lower()):
                         pids.append(pid)
 
-                # case where the module is actually lodaded process (case for DLLs loaded by services)
+                # case where the module is actually loaded process (case for DLLs loaded by services)
                 for dll in self.process_dict[pid][1]:
                     if module.lower() in sanitize_paths(str(dll.FullDllName or '[no dllname]').lower()):
                         pids.append(pid)
@@ -255,6 +255,9 @@ class Autoruns(hivelist.HiveList):
         return winlogon
 
     def parse_winlogon_registration_key(self, key):
+
+        name = str(key.Name)
+
         k = self.dict_for_key(key)
         events = [(evt, k[evt].replace('\x00', '')) for evt in WINLOGON_NOTIFICATION_EVENTS if evt in k]
 
@@ -268,7 +271,7 @@ class Autoruns(hivelist.HiveList):
         if dllname:
             pids = self.find_pids_for_imagepath(dllname)
 
-        return (dllname.replace('\x00', ''), events, key.LastWriteTime, pids)
+        return (dllname.replace('\x00', ''), events, key.LastWriteTime, pids, name)
 
     def parse_service_key(self, service_key):
 
@@ -280,32 +283,37 @@ class Autoruns(hivelist.HiveList):
         if not image_path:
             return
 
-        display_name = values.get("DisplayName")
+        display_name = values.get("DisplayName",'')
+        entry = values.get("ServiceDll", '')
+        main = values.get("ServiceMain", '')
         startup = int(values.get("Start", -1))
         type = int(values.get("Type", -1))
 
         timestamp = service_key.LastWriteTime
 
-        # The service is run through svchost - try to resolve the parameter name
-        entry = None
-
-        if "svchost.exe -k" in image_path:
+        if 'svchost.exe -k' in image_path.lower() or service_types[type] == 'Share_Process':
             sk = self.regapi.reg_get_key(hive_name='system', key='Parameters', given_root=service_key)
-            if sk:
+            if sk and not entry:
                 timestamp = sk.LastWriteTime
                 entry = self.regapi.reg_get_value(hive_name='system', key='', value="ServiceDll", given_root=sk)
-                main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk)
-                if entry:
-                    entry = entry.replace('\x00', '')
-                    if main:
-                        entry += " ({})".format(main)
+                main = self.regapi.reg_get_value(hive_name='system', key='', value='ServiceMain', given_root=sk) 
+
+            if not entry and '@' in display_name:
+                timestamp = service_key.LastWriteTime
+                entry = display_name[display_name.find('@')+1:].split(',')[0]
+
+        if entry:
+            entry = entry.replace('\x00', '')
+            if main:
+                main = main.replace('\x00', '')
+                entry += " ({})".format(main)
 
         # Check if the service is set to automatically start
         # More details here: http://technet.microsoft.com/en-us/library/cc759637(v=ws.10).aspx
 
         if startup in [0, 1, 2]:
             if entry:
-                pids = self.find_pids_for_imagepath(entry)
+                pids = self.find_pids_for_imagepath(entry.split('(')[0].strip())
             else:
                 pids = self.find_pids_for_imagepath(image_path)
 
@@ -553,11 +561,11 @@ class Autoruns(hivelist.HiveList):
                 for name, executable, pids in self.autoruns[hive][(key, timestamp)]:
                     data.append([executable, 'Autoruns', timestamp, name, ", ".join([str(p) for p in pids]) or "", hive, key, name, ""])
         for line in self.winlogon_registrations:
-            data.append([(line[0] or ''), 'Winlogon (Notify)', line[2], 'Hooks: {0}'.format(", ".join([e[1] for e in line[1]]), len(line[1])), ", ".join([str(p) for p in line[3]]) or "", "", "", "", ""])
+            data.append([(line[0] or ''), 'Winlogon (Notify)', line[2], 'Hooks: {0}'.format(", ".join([e[1] for e in line[1]]), len(line[1])), ", ".join([str(p) for p in line[3]]) or "", "Windows/System32/config/SOFTWARE", "Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Notify\\" + line[4] , "", ""])
         for line in self.winlogon:
-            data.append([line[1].replace('\x00', ''), 'Winlogon ({})'.format(line[0]), line[2], "Default value: {}".format(line[3]), ", ".join([str(p) for p in line[4]]) or "" , "Windows/System32/config/SOFTWARE", "Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon", line[0], ""])
+            data.append([line[1].replace('\x00', ''), 'Winlogon ({})'.format(line[0]), line[2], "Default value: {}".format(line[3]), ", ".join([str(p) for p in line[4]]) or "" , "Windows/System32/config/SOFTWARE", "Microsoft\\Windows NT\\CurrentVersion\\Winlogon", line[0], ""])
         for name, timestamp, details, start, type, executable, entry, pids in self.services:
-            data.append([executable.replace('\x00', ''),'Services',timestamp,"{0} - {1} ({2} - {3})".format(name, ("" if details is None else details.replace('\x00', '')) , type, start), ", ".join([str(p) for p in pids]) or "", "Windows/System32/config/SYSTEM", "ControlSet001\\Services\\" +name , "", "" if entry is None else entry])
+            data.append([executable.replace('\x00', ''),'Services',timestamp,"{0} - {1} ({2} - {3})".format(name, ("" if details is None else details.replace('\x00', '')) , type, start), ", ".join([str(p) for p in pids]) or "", "Windows/System32/config/SYSTEM", "ControlSet001\\Services\\" + name , "", "" if entry is None else entry])
         for name, task, task_xml, pids in self.tasks:
             data.append([task['Actions']['Exec']['Command'],'Scheduled Tasks', task['Date'], "{} ({})".format(name, task.get('Description', "N/A")), ", ".join([str(p) for p in pids]) or "", "", "", "", ""])
         for name, date, pids in self.activesetup:
