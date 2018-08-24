@@ -87,20 +87,28 @@ WINLOGON_COMMON_VALUES = {
 # Service key -> value maps
 # Original list from regripper plugins, extra / repeated values from
 # http://technet.microsoft.com/en-us/library/cc759275(v=ws.10).aspx
-SERIVCE_TYPES = {
+# http://www.atmarkit.co.jp/ait/articles/1705/01/news009_2.html (in Japanese)
+# https://github.com/processhacker/processhacker/blob/master/phlib/svcsup.c
+# https://docs.microsoft.com/en-us/windows/desktop/api/winsvc/nf-winsvc-createservicea
+# https://www.codemachine.com/downloads/win10/winnt.h
+SERVICE_TYPES = {
     0x001: "Kernel driver",
     0x002: "File system driver",
     0x004: "Arguments for adapter",
     0x008: "File system driver",
-    0x010: "Own_Process",
-    0x020: "Share_Process",
+    0x010: "Win32_Own_Process",
+    0x020: "Win32_Share_Process",
+    0x050: "User_Own_Process TEMPLATE",
+    0x060: "User_Share_Process TEMPLATE",
+    0x0D0: "User_Own_Process INSTANCE",
+    0x0E0: "User_Share_Process INSTANCE",
     0x100: "Interactive",
     0x110: "Interactive",
     0x120: "Share_process Interactive",
     -1: "Unknown",
 }
 
-SERIVCE_STARTUP = {
+SERVICE_STARTUP = {
     0x00: "Boot Start",
     0x01: "System Start",
     0x02: "Auto Start",
@@ -306,7 +314,7 @@ class Autoruns(common.AbstractWindowsCommand):
         debug.debug('Finished get_services()')
         return results
 
-    # Returns None or (key_path, timestamp, display_name, SERIVCE_STARTUP[startup], SERIVCE_TYPES[type], image_path, service_dll, [int(pids)])
+    # Returns None or (key_path, timestamp, display_name, SERVICE_STARTUP[startup], SERVICE_TYPES[type], image_path, service_dll, [int(pids)])
     def parse_service_key(self, service_key):
 
         try:
@@ -326,7 +334,7 @@ class Autoruns(common.AbstractWindowsCommand):
             if not image_path or startup not in [0, 1, 2]:
                 return None
 
-            if 'svchost.exe -k' in image_path.lower() or SERIVCE_TYPES[type] == 'Share_Process':
+            if 'svchost.exe -k' in image_path.lower() or SERVICE_TYPES[type] == 'Share_Process':
                 sk = self.regapi.reg_get_key(hive_name='system', key='Parameters', given_root=service_key)
                 if sk and not service_dll:
                     timestamp = sk.LastWriteTime
@@ -348,7 +356,7 @@ class Autoruns(common.AbstractWindowsCommand):
         except Exception as e:
             debug.warning('Failed while parsing {}. Exception: {} {}'.format(key_path, type(e).__name__, e.args))
 
-        return (key_path, timestamp, display_name, SERIVCE_STARTUP[startup], SERIVCE_TYPES[type], image_path, service_dll, pids)
+        return (key_path, timestamp, display_name, SERVICE_STARTUP[startup], SERVICE_TYPES[type], image_path, service_dll, pids)
 
     # Returns [] or a list of tuples from parse_activesetup_keys()
     def get_activesetup(self):
