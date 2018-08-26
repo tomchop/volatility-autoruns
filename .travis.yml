@@ -5,12 +5,12 @@ python: "2.7"
 
 before_install:
   - git clone https://github.com/volatilityfoundation/volatility.git /tmp/volatility
-  - pip install pycrypto
   - curl -O https://storage.googleapis.com/volatility-autoruns/BOBBY-PC.raw.gz
   - gunzip BOBBY-PC.raw.gz
 
 install:
-  - cd /tmp/volatility && python setup.py build && python setup.py install && cd ~
+  - pip install pycrypto
+  - pip install /tmp/volatility
 
 script:
   - vol.py --plugins=. -f BOBBY-PC.raw --profile=Win7SP1x64 autoruns --output-file=output.json --output=json -v
