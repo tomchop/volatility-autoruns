@@ -10,8 +10,8 @@ before_install:
   - gunzip BOBBY-PC.raw.gz
 
 install:
-  - cd /tmp/volatility && python setup.py build && python setup.py install
+  - cd /tmp/volatility && python setup.py build && python setup.py install && cd ~
 
 script:
-  - vol.py --plugins=. -f ~/BOBBY-PC.raw --profile=Win7SP1x64 autoruns --output-file=output.json --output=json -v
+  - vol.py --plugins=. -f BOBBY-PC.raw --profile=Win7SP1x64 autoruns --output-file=output.json --output=json -v
   - cmp --silent output.json test_data/expected_output.json
