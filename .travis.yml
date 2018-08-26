@@ -15,3 +15,5 @@ install:
 script:
   - vol.py --plugins=. -f test_data/BOBBY-PC.raw --profile=Win7SP1x64 autoruns --output-file=output.json --output=json -v
   - cmp --silent output.json test_data/expected_output.json
+
+
