@@ -8,7 +8,7 @@ Finding persistence points (also called "Auto-Start Extensibility Points", or AS
 
 To make an analyst's life a bit easier, I came up with the `autoruns` plugin. `autoruns` basically automates most of the tasks you would need to run when trying to find out where malware is persisting from. Once all the autostart locations are found, they are matched with running processes in memory.
 
-##How-to
+## How-to
 
 The plugin is pretty straightforward to use. The folder where the plugin is located should be passed on to Volatility using the `--plugins=` parameter.
 
